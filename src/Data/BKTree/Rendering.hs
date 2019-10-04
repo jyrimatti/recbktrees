@@ -5,8 +5,6 @@ module Data.BKTree.Rendering
   , searchAnnotate
   ) where
 
-import           Control.Comonad.Cofree       (Cofree)
-import           Control.Comonad.Trans.Cofree (CofreeF (..))
 import           Control.Monad.State          (State, get, modify)
 import           Data.BKTree
 import           Data.Bool                    (bool)
@@ -34,12 +32,12 @@ newIdx = modify succ >> get
 --
 -- The Maybe String represents the node name of the child
 -- And the String represents the graphviz doc by that time
-dot :: CofreeF (BKTreeF String) Bool (Maybe String, String) -> State Int (Maybe String, String)
+dot :: BKTreeF (Bool, String) (Maybe String, String) -> State Int (Maybe String, String)
 dot = \case
-  _ :< EmptyF ->
+  EmptyF ->
     -- No tree, no output
     pure (Nothing, "")
-  visible :< NodeF current children -> do
+  NodeF (visible, current) children -> do
     -- For each node, create a node, color it based on visibility and catenate with edges and children
     -- Remember that the type of children is
     -- [Index (Maybe String, String)]
@@ -67,10 +65,10 @@ dot = \case
 --
 -- So in this case we're going from the normal tree into the fixpoint tree
 -- annotating with the cofree with each step
-constAnnotate :: x -> BKTree a -> CofreeF (BKTreeF a) x (BKTree a)
+constAnnotate :: x -> BKTree a -> BKTreeF (x, a) (BKTree a)
 constAnnotate x = \case
-  Empty -> x :< EmptyF
-  Node current children -> x :< NodeF current children
+  Empty -> EmptyF
+  Node current children -> NodeF (x, current) children
 
 -- | Annotate a tree with the result of the culling
 --
@@ -86,11 +84,11 @@ searchAnnotate
   -> Int
   -> a
   -> BKTree a
-  -> CofreeF (BKTreeF a) Bool (Either (Cofree (BKTreeF a) Bool) (BKTree a))
+  -> BKTreeF (Bool, a) (Either (BKTree (Bool, a)) (BKTree a))
 searchAnnotate distance range target = \case
   Empty ->
     -- Empty tree is by default false
-    False :< EmptyF
+    EmptyF
   Node current children ->
     let currentDistance = distance current target
         -- The rules for accepting current node and children
@@ -107,4 +105,4 @@ searchAnnotate distance range target = \case
         culledChildren =
           [ Index d (mkChild child (within d))
           | Index d child <- children ]
-    in accepted :< NodeF current culledChildren
+    in NodeF (accepted, current) culledChildren
